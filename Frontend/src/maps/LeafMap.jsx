@@ -1,5 +1,6 @@
 import { MapContainer, TileLayer, useMap } from "react-leaflet";
 import { useEffect } from "react";
+import DrawControl from "./DrawControl";
 
 function MapUpdater({ place }) {
   const map = useMap();
@@ -15,7 +16,7 @@ function MapUpdater({ place }) {
   return null;
 }
 
-function LeafMap({ selectedPlace }) {
+function LeafMap({ selectedPlace, onAreaSelect, drawingMode,setDrawingMode }) {
   return (
     <MapContainer
       center={[19.0760, 72.8777]}
@@ -24,8 +25,13 @@ function LeafMap({ selectedPlace }) {
     >
       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
 
-      {/* Move map when a place is selected */}
       {selectedPlace && <MapUpdater place={selectedPlace} />}
+
+      <DrawControl
+      drawingMode={drawingMode}
+      setDrawingMode={setDrawingMode}
+      onAreaSelect={onAreaSelect}
+      />
     </MapContainer>
   );
 }
