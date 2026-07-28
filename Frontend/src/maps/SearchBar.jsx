@@ -1,7 +1,54 @@
-import React from 'react';
+import React, { useState , useEffect } from 'react';
 import "./SearchBar.css"
+import { searchLocation } from '../services/nominatim';
 
-const SearchBar = () => {
+const SearchBar = ({onSelectPlace}) => {
+  const [address, setAddress] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [isSelecting, setIsSelecting] = useState(false);
+  useEffect(() => {
+    if (isSelecting) return;
+  // Clear suggestions if input is too short
+  if (address.trim().length < 3) {
+    setSuggestions([]);
+    return;
+  }
+
+  // Wait 400ms after user stops typing
+  const timer = setTimeout(async () => {
+    try {
+      const results = await searchLocation(address);
+      setSuggestions(results);
+    } catch (error) {
+      console.error('Suggestion fetch failed:', error);
+    }
+  }, 400);
+
+  // Cancel previous timer if user types again
+  return () => clearTimeout(timer);
+}, [address,isSelecting]);
+  const [loading, setLoading] = useState(false);
+  const handleSearch = async () => {
+    try {
+      const result = await searchLocation(address);
+
+      console.log('Nominatim result:', result);
+
+      if (result.length > 0) {
+        const place = result[0];
+
+        console.log({
+          lat: parseFloat(place.lat),
+          lon: parseFloat(place.lon),
+          name: place.display_name,
+        });
+      } else {
+        console.log('No location found');
+      }
+    } catch (error) {
+      console.error('Search failed:', error);
+    }
+  };  
   return (
       <div>
         <div className="grid" />
@@ -13,11 +60,75 @@ const SearchBar = () => {
           <div className="white" />
           <div className="border" />
           <div id="main">
-            <input placeholder="Search..." type="text" name="text" className="input" />
+            <input
+            placeholder="Search address..."
+  type="text"
+  name="text"
+  className="input"
+  value={address}
+onChange={async (e) => {
+  const value = e.target.value;
+  setAddress(value);
+
+  // If input is empty, clear suggestions and stop
+  if (!value.trim()) {
+    setSuggestions([]);
+    return;
+  }
+
+  // Optional: wait until at least 3 characters
+  if (value.length < 3) {
+    setSuggestions([]);
+    return;
+  }
+
+  try {
+    const results = await searchLocation(value);
+    setSuggestions(results);
+  } catch (err) {
+    console.error(err);
+  }
+}}
+  onKeyDown={(e) => {
+    if (e.key === 'Enter') handleSearch();
+  }}
+            />
+            {suggestions.length > 0 && (
+  <div className="suggestions">
+    {suggestions.map((place) => (
+
+      <div
+        key={`${place.lat}-${place.lon}`}
+        className="suggestion-item"
+        onMouseDown={() => {
+          setIsSelecting(true);
+  const selectedPlace = {
+    lat: parseFloat(place.lat),
+    lon: parseFloat(place.lon),
+    name: place.display_name,
+  };
+
+  setAddress(place.display_name);
+  setSuggestions([]);
+
+  console.log(selectedPlace);
+
+  // send coordinates to parent (Map.jsx)
+  onSelectPlace(selectedPlace);
+  setTimeout(() => setIsSelecting(false), 0);
+}}
+      >
+        <div className="place-name">
+          {place.display_name}
+        </div>
+      </div>
+    ))}
+  </div>
+)}
             <div id="input-mask" />
             <div id="pink-mask" />
-        
-            <div id="search-icon">
+
+            <div id="search-icon" onClick={handleSearch}>
               <svg xmlns="http://www.w3.org/2000/svg" width={24} viewBox="0 0 24 24" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" height={24} fill="none" className="feather feather-search">
                 <circle stroke="url(#search)" r={8} cy={11} cx={11} />
                 <line stroke="url(#searchl)" y2="16.65" y1={22} x2="16.65" x1={22} />
