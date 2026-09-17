@@ -6,6 +6,7 @@ const SearchBar = ({onSelectPlace}) => {
   const [address, setAddress] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [isSelecting, setIsSelecting] = useState(false);
+  
   useEffect(() => {
     if (isSelecting) return;
   // Clear suggestions if input is too short
@@ -13,19 +14,27 @@ const SearchBar = ({onSelectPlace}) => {
     setSuggestions([]);
     return;
   }
+   const controller = new AbortController();
 
   // Wait 400ms after user stops typing
   const timer = setTimeout(async () => {
     try {
-      const results = await searchLocation(address);
-      setSuggestions(results);
+      const results = await searchLocation(address,controller.signal);
+      // Only update suggestions if this request wasn't cancelled
+      if (!controller.signal.aborted) {
+        setSuggestions(results);
+      }
     } catch (error) {
-      console.error('Suggestion fetch failed:', error);
+      if (error.name !== "AbortError") {
+        console.error("Suggestion fetch failed:", error);
+      }
     }
   }, 400);
 
-  // Cancel previous timer if user types again
-  return () => clearTimeout(timer);
+  return () => {
+    clearTimeout(timer);
+     controller.abort();
+  };
 }, [address,isSelecting]);
   const [loading, setLoading] = useState(false);
   const handleSearch = async () => {
@@ -82,12 +91,7 @@ onChange={async (e) => {
     return;
   }
 
-  try {
-    const results = await searchLocation(value);
-    setSuggestions(results);
-  } catch (err) {
-    console.error(err);
-  }
+ 
 }}
   onKeyDown={(e) => {
     if (e.key === 'Enter') handleSearch();
@@ -98,7 +102,7 @@ onChange={async (e) => {
     {suggestions.map((place) => (
 
       <div
-        key={`${place.lat}-${place.lon}`}
+        key={place.id}
         className="suggestion-item"
         onMouseDown={() => {
           setIsSelecting(true);
