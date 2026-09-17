@@ -1,32 +1,42 @@
-import { useNavigate } from "react-router-dom";
-import { useState } from "react";
-import LeafMap from "../maps/LeafMap";
-import SearchBar from "../maps/SearchBar";
+  import { useNavigate } from "react-router-dom";
+  import { useState } from "react";
+  import LeafMap from "../maps/LeafMap";
+  import SearchBar from "../maps/SearchBar";
 
-function Map() {
-  const navigate = useNavigate();
+  function Map() {
+    const navigate = useNavigate();
 
-  const [selectedPlace, setSelectedPlace] = useState(null);
-  const [selectedArea, setSelectedArea] = useState(null);
-  const [drawingMode, setDrawingMode] = useState(false);
-  return (
-    <div>
-      <h1>Map Page</h1>
+    const [selectedPlace, setSelectedPlace] = useState(null);
+    const [selectedArea, setSelectedArea] = useState(null);
+    const [drawingMode, setDrawingMode] = useState(false);
 
-      <SearchBar onSelectPlace={setSelectedPlace} />
+    function handlePlaceSelect(place){
+      //Set the new location 
+      setSelectedPlace(place); 
+      // Reset previously selected area 
+      setSelectedArea(null); 
+      // Make sure drawing mode is stopped 
+      setDrawingMode(false); 
+    }
 
-      <LeafMap
-        selectedPlace={selectedPlace}
-        onAreaSelect={setSelectedArea}
-        drawingMode={drawingMode}
-        setDrawingMode={setDrawingMode}
-      />
-      <button onClick={() =>{ 
-   
-        setDrawingMode(true)}}>Select Area</button>
-      <button onClick={() => navigate("/view")}>View</button>
-    </div>
-  );
-}
+    return (
+      <div>
+        <h1>Map Page</h1>
 
-export default Map; 
+        <SearchBar onSelectPlace={handlePlaceSelect} />
+
+        <LeafMap
+          selectedPlace={selectedPlace}
+          onAreaSelect={setSelectedArea}
+          drawingMode={drawingMode}
+          setDrawingMode={setDrawingMode}
+        />
+        <button onClick={() =>{ 
+    
+          setDrawingMode(true)}}>{selectedArea ? "Select New Area" : "Select Area"}</button>
+        <button onClick={() => navigate("/view")}>View</button>
+      </div>
+    );
+  }
+
+  export default Map; 

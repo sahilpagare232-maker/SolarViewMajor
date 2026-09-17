@@ -1,11 +1,12 @@
+
 import { useEffect, useRef } from "react";
 import { useMap } from "react-leaflet";
 import L from "leaflet";
 
 function DrawControl({
-    drawingMode,
-    setDrawingMode,
-    onAreaSelect
+  drawingMode,
+  setDrawingMode,
+  onAreaSelect,
 }) {
   const map = useMap();
 
@@ -15,61 +16,74 @@ function DrawControl({
 
   useEffect(() => {
     function onMouseDown(e) {
-  if (!drawingMode) return;
+      if (!drawingMode) return;
 
-  isDrawing.current = true;
-  startPoint.current = e.latlng;
+      isDrawing.current = true;
+      startPoint.current = e.latlng;
 
-  map.dragging.disable();
+      // Disable map dragging while selecting
+      map.dragging.disable();
 
-  if (rectangle.current) {
-    map.removeLayer(rectangle.current);
-    rectangle.current = null;
-  }
-}
+      // Remove previous rectangle
+      if (rectangle.current) {
+        map.removeLayer(rectangle.current);
+        rectangle.current = null;
+      }
+    }
 
     function onMouseMove(e) {
-  if (!drawingMode || !isDrawing.current) return;
+      if (!drawingMode || !isDrawing.current) return;
 
-  const bounds = L.latLngBounds(startPoint.current, e.latlng);
+      const bounds = L.latLngBounds(
+        startPoint.current,
+        e.latlng
+      );
 
-  if (!rectangle.current) {
-    rectangle.current = L.rectangle(bounds, {
-      color: "#3388ff",
-      weight: 2,
-      fillOpacity: 0.2,
-    }).addTo(map);
-  } else {
-    rectangle.current.setBounds(bounds);
-  }
-}
+      if (!rectangle.current) {
+        rectangle.current = L.rectangle(bounds, {
+          color: "#3388ff",
+          weight: 2,
+          fillOpacity: 0.2,
+        }).addTo(map);
+      } else {
+        rectangle.current.setBounds(bounds);
+      }
+    }
 
     function onMouseUp(e) {
       if (!isDrawing.current) return;
-      isDrawing.current = false;
-      map.dragging.enable();
-      setDrawingMode(false);
 
-      const bounds = L.latLngBounds(startPoint.current, e.latlng);
+      isDrawing.current = false;
+
+      // Enable map dragging again
+      map.dragging.enable();
+
+      const bounds = L.latLngBounds(
+        startPoint.current,
+        e.latlng
+      );
 
       const sw = bounds.getSouthWest();
       const ne = bounds.getNorthEast();
 
-      console.log({
+      const area = {
         sw_lat: sw.lat,
         sw_lng: sw.lng,
         ne_lat: ne.lat,
         ne_lng: ne.lng,
-      });
+      };
 
+      console.log("Selected Area:", area);
+
+      // Send selected area to Map.jsx
       if (onAreaSelect) {
-        onAreaSelect({
-          sw_lat: sw.lat,
-          sw_lng: sw.lng,
-          ne_lat: ne.lat,
-          ne_lng: ne.lng,
-        });
+        onAreaSelect(area);
       }
+
+      // Stop drawing mode
+      setDrawingMode(false);
+
+      startPoint.current = null;
     }
 
     map.on("mousedown", onMouseDown);
@@ -81,7 +95,7 @@ function DrawControl({
       map.off("mousemove", onMouseMove);
       map.off("mouseup", onMouseUp);
     };
-  },[map, drawingMode, setDrawingMode, onAreaSelect]);
+  }, [map, drawingMode, setDrawingMode, onAreaSelect]);
 
   return null;
 }
