@@ -2,6 +2,8 @@
   import { useState } from "react";
   import LeafMap from "../maps/LeafMap";
   import SearchBar from "../maps/SearchBar";
+  import { sendArea } from "../services/solarService";
+
 
   function Map() {
     const navigate = useNavigate();
@@ -18,6 +20,18 @@
       // Make sure drawing mode is stopped 
       setDrawingMode(false); 
     }
+    const handleView = async () => {
+  try {
+    const response = await sendArea(selectedArea);
+
+    console.log("Area sent:", response);
+
+    navigate("/view");
+  } catch (error) {
+    console.error("Failed to send area:", error);
+  }
+};
+
 
     return (
       <div>
@@ -32,9 +46,8 @@
           setDrawingMode={setDrawingMode}
         />
         <button onClick={() =>{ 
-    
           setDrawingMode(true)}}>{selectedArea ? "Select New Area" : "Select Area"}</button>
-        <button onClick={() => navigate("/view")}>View</button>
+        <button onClick={handleView}>View</button>
       </div>
     );
   }

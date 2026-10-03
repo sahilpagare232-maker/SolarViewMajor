@@ -1,32 +1,26 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
-app = FastAPI(
-    title="SolarView API",
-    description="Backend API for SolarView",
-    version="1.0.0"
-)
-
-# Allow React frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app = FastAPI()
 
 
-@app.get("/")
-def root():
+class Coordinates(BaseModel):
+    sw_lat: float
+    sw_lng: float
+    ne_lat: float
+    ne_lng: float
+
+
+class AreaData(BaseModel):
+    coordinates: Coordinates
+
+
+@app.post("/api/area")
+def receive_area(area: AreaData):
+    print("Received area:", area)
+
     return {
-        "message": "hello"
-    }
-
-
-@app.get("/api/test")
-def test():
-    return {
-        "message": "Hello from FastAPI!",
-        "status": "connected"
+        "status": "success",
+        "message": "Area received",
+        "area": area.coordinates.model_dump()
     }

@@ -73,7 +73,7 @@ function DrawControl({
         ne_lng: ne.lng,
       };
 
-      console.log("Selected Area:", area);
+      
 
       // Send selected area to Map.jsx
       if (onAreaSelect) {
