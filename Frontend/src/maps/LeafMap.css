@@ -1,0 +1,19 @@
+.map-page {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  min-height: 100vh;
+  padding: 16px;
+}
+
+.map-page h1 {
+  margin: 0;
+}
+
+.LeafMap {
+  width: 70vw;
+  height: 65vh;
+  margin: 0 auto;
+}

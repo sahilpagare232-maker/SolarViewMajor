@@ -34,7 +34,7 @@
 
 
     return (
-      <div>
+      <div className="map-page">
         <h1>Map Page</h1>
 
         <SearchBar onSelectPlace={handlePlaceSelect} />

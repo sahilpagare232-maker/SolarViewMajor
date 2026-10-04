@@ -77,6 +77,7 @@ const SearchBar = ({onSelectPlace}) => {
   value={address}
 onChange={async (e) => {
   const value = e.target.value;
+  setIsSelecting(false);
   setAddress(value);
 
   // If input is empty, clear suggestions and stop
@@ -119,7 +120,6 @@ onChange={async (e) => {
 
   // send coordinates to parent (Map.jsx)
   onSelectPlace(selectedPlace);
-  setTimeout(() => setIsSelecting(false), 0);
 }}
       >
         <div className="place-name">
