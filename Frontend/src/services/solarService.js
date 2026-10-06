@@ -2,17 +2,12 @@
 
 import apiFetch from "./api";
 
-// POST
+// Run the full area analysis using the existing frontend bounding-box format.
 export const sendArea = (selectedArea) => {
-  return apiFetch("/api/area", {
+  return apiFetch("/api/analyze-area", {
     method: "POST",
     body: JSON.stringify({
       coordinates: selectedArea,
     }),
   });
-};
-
-// GET
-export const getSolarData = () => {
-  return apiFetch("/api/solar");
 };

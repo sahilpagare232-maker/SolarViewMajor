@@ -1,26 +1,16 @@
+"""FastAPI application entry point."""
 from fastapi import FastAPI
-from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI()
+from api.routes.area import router as area_router
+from config import settings
 
-
-class Coordinates(BaseModel):
-    sw_lat: float
-    sw_lng: float
-    ne_lat: float
-    ne_lng: float
+app = FastAPI(title="Solar Potential & Panel Optimization API", version="1.0.0")
+app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app.include_router(area_router)
 
 
-class AreaData(BaseModel):
-    coordinates: Coordinates
-
-
-@app.post("/api/area")
-def receive_area(area: AreaData):
-    print("Received area:", area)
-
-    return {
-        "status": "success",
-        "message": "Area received",
-        "area": area.coordinates.model_dump()
-    }
+@app.get("/health", tags=["health"])
+def health() -> dict[str, str]:
+    """Return a lightweight process health check."""
+    return {"status": "ok"}

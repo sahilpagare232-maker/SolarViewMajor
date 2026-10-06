@@ -1,157 +1,68 @@
-import React, { useState , useEffect } from 'react';
-import "./SearchBar.css"
-import { searchLocation } from '../services/nominatim';
+import { useEffect, useState } from "react";
+import { searchLocation } from "../services/nominatim";
+import "./SearchBar.css";
 
-const SearchBar = ({onSelectPlace}) => {
-  const [address, setAddress] = useState('');
+export default function SearchBar({ onSelectPlace }) {
+  const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState([]);
-  const [isSelecting, setIsSelecting] = useState(false);
-  
+  const [loadingQuery, setLoadingQuery] = useState(null);
+  const [suggestionQuery, setSuggestionQuery] = useState("");
+  const [error, setError] = useState("");
+
   useEffect(() => {
-    if (isSelecting) return;
-  // Clear suggestions if input is too short
-  if (address.trim().length < 3) {
+    if (query.trim().length < 3) {
+      return undefined;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setLoadingQuery(query);
+      setError("");
+      try {
+        const places = await searchLocation(query, controller.signal);
+        if (!controller.signal.aborted) {
+          setSuggestions(places);
+          setSuggestionQuery(query);
+          setError(places.length ? "" : "No locations found. Try a nearby city or different spelling.");
+        }
+      } catch {
+        if (!controller.signal.aborted) setError("Place search is temporarily unavailable.");
+      } finally {
+        if (!controller.signal.aborted) setLoadingQuery((current) => current === query ? null : current);
+      }
+    }, 350);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [query]);
+
+  function choosePlace(place) {
+    onSelectPlace({ lat: Number(place.lat), lon: Number(place.lon), name: place.display_name });
+    setQuery(place.display_name);
     setSuggestions([]);
-    return;
+    setSuggestionQuery("");
+    setError("");
   }
-   const controller = new AbortController();
 
-  // Wait 400ms after user stops typing
-  const timer = setTimeout(async () => {
-    try {
-      const results = await searchLocation(address,controller.signal);
-      // Only update suggestions if this request wasn't cancelled
-      if (!controller.signal.aborted) {
-        setSuggestions(results);
-      }
-    } catch (error) {
-      if (error.name !== "AbortError") {
-        console.error("Suggestion fetch failed:", error);
-      }
-    }
-  }, 400);
+  function handleSubmit(event) {
+    event.preventDefault();
+    if (suggestionQuery === query && suggestions.length) choosePlace(suggestions[0]);
+    else if (query.trim().length < 3) setError("Enter at least 3 characters to search.");
+    else if (loadingQuery !== query && suggestionQuery !== query) setError("Choose a matching place from the suggestions.");
+  }
 
-  return () => {
-    clearTimeout(timer);
-     controller.abort();
-  };
-}, [address,isSelecting]);
-  const [loading, setLoading] = useState(false);
-  const handleSearch = async () => {
-    try {
-      const result = await searchLocation(address);
-
-      console.log('Nominatim result:', result);
-
-      if (result.length > 0) {
-        const place = result[0];
-
-        console.log({
-          lat: parseFloat(place.lat),
-          lon: parseFloat(place.lon),
-          name: place.display_name,
-        });
-      } else {
-        console.log('No location found');
-      }
-    } catch (error) {
-      console.error('Search failed:', error);
-    }
-  };  
   return (
-      <div>
-        <div className="grid" />
-        <div id="poda">
-          <div className="glow" />
-          <div className="darkBorderBg" />
-          <div className="darkBorderBg" />
-          <div className="darkBorderBg" />
-          <div className="white" />
-          <div className="border" />
-          <div id="main">
-            <input
-            placeholder="Search address..."
-  type="text"
-  name="text"
-  className="input"
-  value={address}
-onChange={async (e) => {
-  const value = e.target.value;
-  setIsSelecting(false);
-  setAddress(value);
-
-  // If input is empty, clear suggestions and stop
-  if (!value.trim()) {
-    setSuggestions([]);
-    return;
-  }
-
-  // Optional: wait until at least 3 characters
-  if (value.length < 3) {
-    setSuggestions([]);
-    return;
-  }
-
- 
-}}
-  onKeyDown={(e) => {
-    if (e.key === 'Enter') handleSearch();
-  }}
-            />
-            {suggestions.length > 0 && (
-  <div className="suggestions">
-    {suggestions.map((place) => (
-
-      <div
-        key={place.id}
-        className="suggestion-item"
-        onMouseDown={() => {
-          setIsSelecting(true);
-  const selectedPlace = {
-    lat: parseFloat(place.lat),
-    lon: parseFloat(place.lon),
-    name: place.display_name,
-  };
-
-  setAddress(place.display_name);
-  setSuggestions([]);
-
-  console.log(selectedPlace);
-
-  // send coordinates to parent (Map.jsx)
-  onSelectPlace(selectedPlace);
-}}
-      >
-        <div className="place-name">
-          {place.display_name}
-        </div>
-      </div>
-    ))}
-  </div>
-)}
-            <div id="input-mask" />
-            <div id="pink-mask" />
-
-            <div id="search-icon" onClick={handleSearch}>
-              <svg xmlns="http://www.w3.org/2000/svg" width={24} viewBox="0 0 24 24" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" height={24} fill="none" className="feather feather-search">
-                <circle stroke="url(#search)" r={8} cy={11} cx={11} />
-                <line stroke="url(#searchl)" y2="16.65" y1={22} x2="16.65" x1={22} />
-                <defs>
-                  <linearGradient gradientTransform="rotate(50)" id="search">
-                    <stop stopColor="#f8e7f8" offset="0%" />
-                    <stop stopColor="#b6a9b7" offset="50%" />
-                  </linearGradient>
-                  <linearGradient id="searchl">
-                    <stop stopColor="#b6a9b7" offset="0%" />
-                    <stop stopColor="#837484" offset="50%" />
-                  </linearGradient>
-                </defs>
-              </svg>
-            </div>
-          </div>
-        </div>
-      </div>
+    <form className="place-search" onSubmit={handleSubmit} role="search">
+      <label className="sr-only" htmlFor="place-search-input">Search for a location</label>
+      <span className="search-symbol" aria-hidden="true">⌕</span>
+      <input id="place-search-input" type="search" value={query} onChange={(event) => { setError(""); setQuery(event.target.value); }} placeholder="Search a city or address" autoComplete="off" aria-expanded={suggestions.length > 0} aria-controls="place-suggestions" />
+      <button type="submit" aria-label="Select first matching place" disabled={loadingQuery === query || query.trim().length < 3}>{loadingQuery === query ? <span className="spinner spinner-dark" /> : "Search"}</button>
+      {query.trim().length >= 3 && suggestionQuery === query && suggestions.length > 0 && <div className="place-suggestions" id="place-suggestions" role="listbox">
+        {suggestions.map((place) => <button type="button" role="option" className="place-suggestion" key={place.id} onClick={() => choosePlace(place)}>
+          <span className="suggestion-pin" aria-hidden="true">⌖</span><span>{place.display_name}</span>
+        </button>)}
+      </div>}
+      {error && <span className="search-message" role="status">{error}</span>}
+    </form>
   );
 }
-
-export default SearchBar
