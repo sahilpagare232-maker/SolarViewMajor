@@ -5,15 +5,20 @@ from models.area_models import BoundingBox
 from services.geojson_service import analyze_building, buildings_geojson, usable_roof
 from services.optimization_service import pack_panels
 from services.osm_service import OSMServiceError, fetch_buildings
+from services.grid_service import fetch_grid_buildings
 
 
 async def analyze_area(bounds: BoundingBox) -> dict[str, object]:
     """Retrieve buildings and return footprint, rooftop, solar and layout results."""
     try:
-        buildings = await fetch_buildings(bounds)
+        buildings = await fetch_grid_buildings(bounds)
     except OSMServiceError as exc:
         message = str(exc)
-        status = 504 if "timed out" in message.lower() else 502
+        status = (
+            exc.status_code
+            if exc.status_code in {413, 429, 502, 503, 504}
+            else 504 if "timed out" in message.lower() else 502
+        )
         raise HTTPException(status_code=status, detail=message) from exc
     if not buildings:
         raise HTTPException(status_code=404, detail="No building footprints with usable geometry were found in the selected area.")

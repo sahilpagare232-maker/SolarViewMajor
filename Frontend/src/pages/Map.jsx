@@ -12,7 +12,7 @@ function MapPage() {
   const [selectedPlace, setSelectedPlace] = useState(DEFAULT_PLACE);
   const [selectedArea, setSelectedArea] = useState(null);
   const [drawingMode, setDrawingMode] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [activeRequest, setActiveRequest] = useState(null);
   const [error, setError] = useState("");
 
   function handlePlaceSelect(place) {
@@ -23,8 +23,8 @@ function MapPage() {
   }
 
   async function handleAnalyze() {
-    if (!selectedArea || loading) return;
-    setLoading(true);
+    if (!selectedArea || activeRequest) return;
+    setActiveRequest("analysis");
     setError("");
     try {
       const analysis = await sendArea(selectedArea);
@@ -33,14 +33,29 @@ function MapPage() {
     } catch (requestError) {
       setError(requestError.message || "Analysis failed. Please try again.");
     } finally {
-      setLoading(false);
+      setActiveRequest(null);
+    }
+  }
+
+  async function handleCesiumView() {
+    if (!selectedArea || activeRequest) return;
+    setActiveRequest("cesium");
+    setError("");
+    try {
+      const analysis = await sendArea(selectedArea);
+      try { sessionStorage.setItem("solarview-analysis", JSON.stringify(analysis)); } catch { /* Route state still carries the result. */ }
+      navigate("/cesium-viewer", { state: { analysis } });
+    } catch (requestError) {
+      setError(requestError.message || "Could not load building footprints. Please try again.");
+    } finally {
+      setActiveRequest(null);
     }
   }
 
   return (
     <main className="solar-page map-page-shell">
       <header className="topbar">
-        <Link className="brand" to="/" aria-label="SolarView home"><span className="brand-mark">☀</span> SolarView</Link>
+        <Link className="brand" to="/" aria-label="SolarView home"><span className="brand-mark">☀</span> SunScapeAI</Link>
         <span className="topbar-note">Rooftop solar potential</span>
       </header>
 
@@ -66,11 +81,14 @@ function MapPage() {
           </div>
         </div>
         <div className="selection-actions">
-          <button className="button button-secondary" type="button" onClick={() => setDrawingMode(true)} disabled={loading}>
+          <button className="button button-secondary" type="button" onClick={() => setDrawingMode(true)} disabled={activeRequest !== null}>
             {drawingMode ? "Drag on map to select…" : selectedArea ? "Redraw area" : "＋ Select area"}
           </button>
-          <button className="button button-primary" type="button" onClick={handleAnalyze} disabled={!selectedArea || loading}>
-            {loading ? <><span className="spinner" /> Analyzing area…</> : "Analyze solar potential →"}
+          <button className="button button-secondary" type="button" onClick={handleCesiumView} disabled={!selectedArea || activeRequest !== null}>
+            {activeRequest === "cesium" ? <><span className="spinner spinner-dark" /> Loading footprints…</> : "View 3D footprints"}
+          </button>
+          <button className="button button-primary" type="button" onClick={handleAnalyze} disabled={!selectedArea || activeRequest !== null}>
+            {activeRequest === "analysis" ? <><span className="spinner" /> Analyzing area…</> : "Analyze solar potential →"}
           </button>
         </div>
       </section>

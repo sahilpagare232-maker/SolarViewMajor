@@ -1,4 +1,6 @@
 """GeoJSON conversion and metric building geometry analysis."""
+import math
+import re
 from typing import Any
 from pyproj import CRS, Transformer
 from shapely.geometry import mapping
@@ -31,17 +33,30 @@ def analyze_building(building: dict[str, Any], bounds: BoundingBox) -> dict[str,
     coords = list(min_rect.exterior.coords) if hasattr(min_rect, "exterior") else []
     orientation = None
     if len(coords) > 1:
-        import math
         dx, dy = coords[1][0] - coords[0][0], coords[1][1] - coords[0][1]
         orientation = round(math.degrees(math.atan2(dy, dx)) % 180, 2)
     tags = building.get("tags", {})
+    raw_height = tags.get("height")
     try:
-        height = float(tags["height"].removesuffix(" m")) if tags.get("height") else None
-    except (ValueError, AttributeError):
+        if isinstance(raw_height, (int, float)):
+            height = float(raw_height)
+        elif isinstance(raw_height, str):
+            height_match = re.fullmatch(
+                r"\s*(\d+(?:\.\d+)?)\s*(?:m|meters?|metres?)?\s*",
+                raw_height,
+                re.IGNORECASE,
+            )
+            height = float(height_match.group(1)) if height_match else None
+        else:
+            height = None
+        if height is not None and (not math.isfinite(height) or height <= 0):
+            height = None
+    except (ValueError, TypeError):
         height = None
     return {"building_id": building["id"], "building_type": tags.get("building"), "height": height,
             "area_m2": round(projected.area, 2), "centroid": {"lat": centroid.y, "lng": centroid.x},
-            "orientation_deg": orientation, "geometry": mapping(geometry), "_projected": projected}
+            "orientation_deg": orientation, "height_tag": raw_height,
+            "geometry": mapping(geometry), "_projected": projected}
 
 
 def buildings_geojson(buildings: list[dict[str, Any]], bounds: BoundingBox) -> dict[str, Any]:
@@ -49,7 +64,7 @@ def buildings_geojson(buildings: list[dict[str, Any]], bounds: BoundingBox) -> d
     features = []
     for item in buildings:
         row = analyze_building(item, bounds)
-        features.append({"type": "Feature", "id": row["building_id"], "properties": {k: row[k] for k in ("building_id", "building_type", "height", "area_m2", "centroid", "orientation_deg")}, "geometry": row["geometry"]})
+        features.append({"type": "Feature", "id": row["building_id"], "properties": {k: row[k] for k in ("building_id", "building_type", "height", "height_tag", "area_m2", "centroid", "orientation_deg")}, "geometry": row["geometry"]})
     return {"type": "FeatureCollection", "features": features}
 
 
