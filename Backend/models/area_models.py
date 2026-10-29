@@ -21,6 +21,7 @@ class BoundingBox(BaseModel):
 
 class AreaRequest(BaseModel):
     coordinates: BoundingBox
+    include_optimization: bool = True
 
 
 class AnalysisResponse(BaseModel):

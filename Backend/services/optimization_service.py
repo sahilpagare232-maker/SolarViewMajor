@@ -1,4 +1,5 @@
 """Deterministic, setback-aware panel packing for projected roof geometry."""
+import asyncio
 import math
 from typing import Any
 from shapely.affinity import rotate
@@ -10,7 +11,8 @@ from config import settings
 from models.area_models import BoundingBox
 from models.solar_models import PanelConfig
 from services.geojson_service import _transformer, metric_crs
-from services.pv_service import estimate_panel_annual_energy
+from services.ml_solar_service import model_metadata
+from services.pv_service import estimate_panel_annual_energy, estimate_panel_annual_energy_from_tmy
 
 MAX_CANDIDATE_POSITIONS = 12_000
 
@@ -66,7 +68,8 @@ def _pack_orientation(usable_geometry: Any, bounds: BoundingBox, config: PanelCo
 
 def pack_panels(usable_geometry: Any, bounds: BoundingBox, panel: PanelConfig | None = None,
                 *, height_m: float | None = None, setback_already_applied: bool = False,
-                latitude: float | None = None, longitude: float | None = None) -> dict[str, Any]:
+                latitude: float | None = None, longitude: float | None = None,
+                calculate_energy: bool = True) -> dict[str, Any]:
     """Choose the better of two deterministic grid orientations, maximizing feasible panel count.
 
     Input geometry must be in a local metric CRS. The objective is panel count, with
@@ -88,7 +91,9 @@ def pack_panels(usable_geometry: Any, bounds: BoundingBox, panel: PanelConfig | 
     area = round(count * config.width_m * config.length_m, 2)
     latitude = latitude if latitude is not None else (bounds.sw_lat + bounds.ne_lat) / 2
     longitude = longitude if longitude is not None else (bounds.sw_lng + bounds.ne_lng) / 2
-    energy = estimate_panel_annual_energy(latitude, longitude, count, config.rated_power_w)
+    energy = estimate_panel_annual_energy(
+        latitude, longitude, count if calculate_energy else 0, config.rated_power_w
+    )
     return {"panel_count": count, "usable_area_m2": round(usable_area, 2),
             "panel_covered_area_m2": area, "installed_capacity_kw": round(count * config.rated_power_w / 1000, 2),
             "annual_energy_kwh": energy["annual_energy_kwh_estimate"], "panel_layout": {"type": "FeatureCollection", "features": features},
@@ -100,7 +105,8 @@ def pack_panels(usable_geometry: Any, bounds: BoundingBox, panel: PanelConfig | 
 
 
 def optimize_building(building_id: str, geometry_geojson: dict[str, Any], bounds: BoundingBox,
-                      panel: PanelConfig | None = None, height_m: float | None = None) -> dict[str, Any]:
+                      panel: PanelConfig | None = None, height_m: float | None = None,
+                      calculate_energy: bool = True) -> dict[str, Any]:
     """Project and optimize one selected WGS84 polygon/multipolygon footprint."""
     try:
         geometry = shape(geometry_geojson)
@@ -132,6 +138,7 @@ def optimize_building(building_id: str, geometry_geojson: dict[str, Any], bounds
         setback_already_applied=True,
         latitude=centroid.y,
         longitude=centroid.x,
+        calculate_energy=calculate_energy,
     )
     result.update({
         "building_id": building_id,
@@ -143,4 +150,54 @@ def optimize_building(building_id: str, geometry_geojson: dict[str, Any], bounds
         "annual_energy_data_class": result["solar_model"]["energy_data_class"],
         "panel_coverage_percent": round(100 * result["panel_covered_area_m2"] / result["usable_area_m2"], 1) if result["usable_area_m2"] else 0,
     })
+    return result
+
+
+async def optimize_building_with_agent(
+    building_id: str,
+    geometry_geojson: dict[str, Any],
+    bounds: BoundingBox,
+    panel: PanelConfig | None = None,
+    height_m: float | None = None,
+) -> dict[str, Any]:
+    """Orchestrate geometry-safe placement and ML-based annual power estimation."""
+    result = await asyncio.to_thread(
+        optimize_building,
+        building_id,
+        geometry_geojson,
+        bounds,
+        panel,
+        height_m,
+        False,
+    )
+    if result["panel_count"]:
+        footprint = shape(geometry_geojson)
+        if not footprint.is_valid:
+            footprint = footprint.buffer(0)
+        centroid = footprint.centroid
+        energy = await estimate_panel_annual_energy_from_tmy(
+            centroid.y,
+            centroid.x,
+            result["panel_count"],
+            result["panel_spec"]["rated_power_w"],
+        )
+        result["solar_model"] = energy
+        result["annual_energy_kwh"] = energy["annual_energy_kwh_estimate"]
+        result["annual_energy_data_class"] = energy["energy_data_class"]
+    else:
+        energy = result["solar_model"]
+
+    result["optimizer"] = "Solar placement agent: geometric feasibility + trained ML power estimator"
+    result["agent"] = {
+        "name": "Solar placement agent",
+        "status": "complete",
+        "objective": result["optimization_objective"],
+        "steps": [
+            {"name": "Inspect roof", "status": "complete", "detail": f"Used the selected OSM footprint; roof height {'is tagged' if height_m is not None else 'is unavailable'}; flat-roof assumption applied."},
+            {"name": "Find feasible layouts", "status": "complete", "detail": "Projected to local metres; checked two deterministic panel-grid orientations against setbacks and panel spacing."},
+            {"name": "Estimate solar output", "status": "complete", "detail": energy["energy_data_class"]},
+            {"name": "Validate placement", "status": "complete", "detail": f"Returned {result['panel_count']} panel polygons after in-roof fit checks; no overlaps are allowed by the grid spacing."},
+        ],
+        "machine_learning_model": model_metadata(),
+    }
     return result

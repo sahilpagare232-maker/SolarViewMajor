@@ -29,7 +29,11 @@ class Settings:
     minimum_roof_area_m2: float = _float_env("MINIMUM_ROOF_AREA_M2", 4.0)
     default_tilt: float = _float_env("DEFAULT_TILT", 20.0)
     default_azimuth: float = _float_env("DEFAULT_AZIMUTH", 180.0)
-    synthetic_annual_irradiance_kwh_m2: float = _float_env("SYNTHETIC_ANNUAL_IRRADIANCE_KWH_M2", 1700.0)
+    pvgis_api_url: str = os.getenv("PVGIS_API_URL", "https://re.jrc.ec.europa.eu/api/v5_3/")
+    pvgis_timeout_seconds: float = _float_env("PVGIS_TIMEOUT_SECONDS", 8.0)
+    system_losses_fraction: float = _float_env("SYSTEM_LOSSES_FRACTION", 0.14)
+    inverter_efficiency: float = _float_env("INVERTER_EFFICIENCY", 0.96)
+    panel_temperature_coefficient: float = _float_env("PANEL_TEMPERATURE_COEFFICIENT", -0.0035)
 
 
 settings = Settings()

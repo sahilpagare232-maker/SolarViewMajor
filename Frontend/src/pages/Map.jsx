@@ -42,7 +42,7 @@ function MapPage() {
     setActiveRequest("cesium");
     setError("");
     try {
-      const analysis = await sendArea(selectedArea);
+      const analysis = await sendArea(selectedArea, { includeOptimization: false });
       try { sessionStorage.setItem("solarview-analysis", JSON.stringify(analysis)); } catch { /* Route state still carries the result. */ }
       navigate("/cesium-viewer", { state: { analysis } });
     } catch (requestError) {
@@ -93,7 +93,7 @@ function MapPage() {
         </div>
       </section>
       {error && <div className="alert-error" role="alert"><strong>Couldn’t complete the analysis.</strong> {error}</div>}
-      <p className="map-footnote">Building data comes from OpenStreetMap. Solar output is an estimate using demo irradiance data.</p>
+      <p className="map-footnote">Building data comes from OpenStreetMap. Annual output uses PVGIS typical-year weather when available, with a labeled PVLib clear-sky fallback.</p>
     </main>
   );
 }

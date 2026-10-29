@@ -15,6 +15,6 @@ export default function Home() {
       <div className="hero-art" aria-hidden="true"><div className="sun-disc" /><div className="solar-roof"><div className="roof-top"><div className="roof-panels">{Array.from({ length: 12 }, (_, i) => <span key={i} />)}</div></div><div className="roof-front"><div className="window-row"><i /><i /><i /></div><div className="window-row"><i /><i /><i /></div><div className="door" /></div></div><div className="floating-chip"><span className="chip-spark">✦</span><span><strong>Solar ready</strong><small>Explore a selected area</small></span></div><div className="art-ground" /></div>
     </section>
     <section className="steps-section"><div className="steps-heading"><div><p className="eyebrow">HOW IT WORKS</p><h2>From map to insight in three steps</h2></div><p>Choose a place and see what the rooftops could support.</p></div><div className="steps-grid">{steps.map((step) => <article className="step-card" key={step.number}><span>{step.number}</span><h3>{step.title}</h3><p>{step.text}</p></article>)}</div></section>
-    <footer className="home-footer">SolarView provides exploratory estimates. Energy values use synthetic demo irradiance and are not a site survey.</footer>
+    <footer className="home-footer">SolarView provides modeled estimates from typical-year or clear-sky weather data; results are not a site survey or live forecast.</footer>
   </main>;
 }

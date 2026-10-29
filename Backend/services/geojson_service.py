@@ -67,12 +67,45 @@ def analyze_building(building: dict[str, Any], bounds: BoundingBox) -> dict[str,
             "geometry": mapping(geometry), "_projected": projected}
 
 
-def buildings_geojson(buildings: list[dict[str, Any]], bounds: BoundingBox) -> dict[str, Any]:
+def _height_from_tags(tags: dict[str, Any]) -> float | None:
+    raw_height = tags.get("height")
+    try:
+        if isinstance(raw_height, (int, float)):
+            height = float(raw_height)
+        elif isinstance(raw_height, str):
+            height_match = re.fullmatch(
+                r"\s*(\d+(?:\.\d+)?)\s*(?:m|meters?|metres?)?\s*",
+                raw_height,
+                re.IGNORECASE,
+            )
+            height = float(height_match.group(1)) if height_match else None
+        else:
+            height = None
+        if height is not None and (not math.isfinite(height) or height <= 0):
+            return None
+        return height
+    except (ValueError, TypeError):
+        return None
+
+
+def buildings_geojson(buildings: list[dict[str, Any]], bounds: BoundingBox, *, detailed: bool = True) -> dict[str, Any]:
     """Build frontend-ready building features with metric area and honest height."""
     features = []
     for item in buildings:
-        row = analyze_building(item, bounds)
-        features.append({"type": "Feature", "id": row["building_id"], "properties": {k: row[k] for k in ("building_id", "building_type", "height", "height_tag", "area_m2", "centroid", "orientation_deg")}, "geometry": row["geometry"]})
+        if detailed:
+            row = analyze_building(item, bounds)
+            properties = {k: row[k] for k in ("building_id", "building_type", "height", "height_tag", "area_m2", "centroid", "orientation_deg")}
+            geometry = row["geometry"]
+        else:
+            tags = item.get("tags", {})
+            properties = {
+                "building_id": item["id"],
+                "building_type": tags.get("building"),
+                "height": _height_from_tags(tags),
+                "height_tag": tags.get("height"),
+            }
+            geometry = mapping(item["geometry"])
+        features.append({"type": "Feature", "id": item["id"], "properties": properties, "geometry": geometry})
     return {"type": "FeatureCollection", "features": features}
 
 

@@ -1,0 +1,35 @@
+{
+  "model_name": "synthetic solar power linear regressor",
+  "model_version": 1,
+  "target": "instantaneous DC panel power in watts",
+  "features": [
+    "rated_power_times_effective_poa",
+    "irradiance_temperature_interaction"
+  ],
+  "feature_center": [
+    14.998067683999999,
+    0.0
+  ],
+  "feature_scale": [
+    154.59451516049998,
+    384.245916802833
+  ],
+  "coefficients": [
+    14.998069052633399,
+    154.5945130176728,
+    -1.3448612864056884
+  ],
+  "temperature_coefficient": -0.0035,
+  "training_samples": 9600,
+  "validation_samples": 2400,
+  "held_out_sites": [
+    "site_08",
+    "site_09"
+  ],
+  "validation_metrics": {
+    "mae_w": 8.666761794479175e-05,
+    "rmse_w": 0.00015550895136323556,
+    "r2": 0.99999999999603
+  },
+  "training_data_class": "PVLib clear-sky model with synthetic cloud, shade, temperature, and panel variations; not measured generation data"
+}

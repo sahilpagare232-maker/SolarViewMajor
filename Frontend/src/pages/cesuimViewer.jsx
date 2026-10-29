@@ -7,7 +7,6 @@ import {
   GeoJsonDataSource,
   Color,
   HeightReference,
-  Matrix4,
   Rectangle,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType
@@ -17,6 +16,12 @@ import "cesium/Build/Cesium/Widgets/widgets.css";
 import { optimizeBuilding as requestBuildingOptimization } from "../services/solarService";
 
 const DEFAULT_DISPLAY_HEIGHT_M = 10;
+const AGENT_STAGES = [
+  "Reading the selected rooftop geometry",
+  "Checking panel layouts against roof boundaries",
+  "Estimating output with the trained solar model",
+  "Validating the final panel layout",
+];
 
 function readSavedAnalysis() {
   try {
@@ -104,6 +109,7 @@ export default function CesiumViewer() {
   const [panelResult, setPanelResult] = useState(null);
   const [panelLoading, setPanelLoading] = useState(false);
   const [panelError, setPanelError] = useState("");
+  const [agentStageIndex, setAgentStageIndex] = useState(0);
   const loading = loadState?.geojson !== renderableGeojson;
   const loadError = loading ? "" : loadState?.error ?? "";
 
@@ -135,40 +141,23 @@ export default function CesiumViewer() {
   skyBox: false,
   skyAtmosphere: false,
   scene3DOnly: true,
+  requestRenderMode: true,
+  maximumRenderTimeChange: Infinity,
+  msaaSamples: 2,
   infoBox: false,
   selectionIndicator: false,
 });
 viewerRef.current = viewer;
-const positions = renderableGeojson.features.flatMap((feature) => {
-  const points = [];
-
-  function collect(coords) {
-    if (!Array.isArray(coords)) return;
-
-    if (typeof coords[0] === "number") {
-      points.push(coords);
-      return;
-    }
-
-    coords.forEach(collect);
-  }
-
-  collect(feature.geometry.coordinates);
-  return points;
-});
-
-if (positions.length > 0) {
-  const longitudes = positions.map((p) => p[0]);
-  const latitudes = positions.map((p) => p[1]);
-
+const viewArea = analysis?.area;
+if (viewArea) {
   viewer.entities.add({
     name: "Flat Ground",
     rectangle: {
       coordinates: Rectangle.fromDegrees(
-        Math.min(...longitudes),
-        Math.min(...latitudes),
-        Math.max(...longitudes),
-        Math.max(...latitudes)
+        viewArea.sw_lng,
+        viewArea.sw_lat,
+        viewArea.ne_lng,
+        viewArea.ne_lat
       ),
       height: 0,
       material: Color.DARKGRAY,
@@ -244,7 +233,19 @@ if (positions.length > 0) {
           entity.polygon.extrudedHeight = height ?? DEFAULT_DISPLAY_HEIGHT_M;
         }
 
-        await viewer.zoomTo(dataSource);
+if (viewArea) {
+  viewer.camera.flyTo({
+    destination: Rectangle.fromDegrees(
+      viewArea.sw_lng,
+      viewArea.sw_lat,
+      viewArea.ne_lng,
+      viewArea.ne_lat
+    ),
+    duration: 0.35,
+  });
+} else {
+  await viewer.zoomTo(dataSource);
+}
 
 if (cancelled || viewer.isDestroyed()) return;
 
@@ -256,8 +257,6 @@ setLoadState({
 
 // Focus closely on the generated buildings.
 viewer.scene.screenSpaceCameraController.minimumZoomDistance = 20;
-
-viewer.camera.lookAtTransform(Matrix4.IDENTITY);
       } catch (error) {
         if (cancelled) return;
         console.error("Could not display building GeoJSON in Cesium.", error);
@@ -279,13 +278,17 @@ viewer.camera.lookAtTransform(Matrix4.IDENTITY);
         viewer.destroy();
       }
     };
-  }, [renderableGeojson]);
+  }, [renderableGeojson, analysis?.area]);
 
   async function handleOptimizeSelectedBuilding() {
     if (!selectedBuilding || !analysis?.area || panelLoading) return;
     setPanelLoading(true);
+    setAgentStageIndex(0);
     setPanelError("");
     setPanelResult(null);
+    const stageTimer = window.setInterval(() => {
+      setAgentStageIndex((index) => (index + 1) % AGENT_STAGES.length);
+    }, 1000);
     try {
       const result = await requestBuildingOptimization({
         building_id: selectedBuilding.building_id,
@@ -320,6 +323,7 @@ viewer.camera.lookAtTransform(Matrix4.IDENTITY);
     } catch (error) {
       setPanelError(error.message || "Panel placement failed. Select another building and try again.");
     } finally {
+      window.clearInterval(stageTimer);
       setPanelLoading(false);
     }
   }
@@ -357,8 +361,9 @@ viewer.camera.lookAtTransform(Matrix4.IDENTITY);
         <h2 style={{ margin: "0 0 6px", fontSize: 17 }}>{selectedBuilding.building_type}</h2>
         <p style={{ margin: "0 0 14px", color: "#77847c", fontSize: 12 }}>OSM ID {selectedBuilding.building_id} · {selectedBuilding.height_m == null ? "Height unavailable" : `${selectedBuilding.height_m} m tagged height`}</p>
         <button className="button button-primary" type="button" onClick={handleOptimizeSelectedBuilding} disabled={panelLoading} style={{ width: "100%" }}>
-          {panelLoading ? <><span className="spinner" /> Placing panels…</> : "Optimize panel placement"}
+          {panelLoading ? <><span className="spinner" /> Solar agent working…</> : "Run solar placement agent"}
         </button>
+        {panelLoading && <p aria-live="polite" style={{ margin: "10px 0 0", color: "#53655a", fontSize: 11 }}>Step {agentStageIndex + 1} of {AGENT_STAGES.length}: {AGENT_STAGES[agentStageIndex]}</p>}
         {panelError && <p role="alert" style={{ margin: "12px 0 0", color: "#983a2f", fontSize: 12 }}>{panelError}</p>}
         {panelResult && <div aria-live="polite" style={{ marginTop: 14, borderTop: "1px solid #e5eae4", paddingTop: 12, fontSize: 12, lineHeight: 1.7 }}>
           <strong>{panelResult.panel_count} panels</strong> · {panelResult.installed_capacity_kw} kWp<br />
@@ -366,6 +371,13 @@ viewer.camera.lookAtTransform(Matrix4.IDENTITY);
           Usable roof {panelResult.usable_area_m2} m² · Coverage {panelResult.panel_coverage_percent}%<br />
           Annual energy ≈ {Number(panelResult.annual_energy_kwh).toLocaleString()} kWh
           <p style={{ margin: "8px 0 0", color: "#77847c", fontSize: 10 }}>{panelResult.roof_assumption}. Energy is {panelResult.annual_energy_data_class}. {selectedBuilding.height_m == null ? `For display only, panels use the existing ${DEFAULT_DISPLAY_HEIGHT_M} m placeholder building height.` : "Roof height uses the OSM height tag."}</p>
+          {panelResult.agent && <div style={{ marginTop: 12, borderTop: "1px solid #e5eae4", paddingTop: 10 }}>
+            <strong style={{ display: "block", marginBottom: 5 }}>{panelResult.agent.name} · complete</strong>
+            <ol style={{ margin: 0, paddingLeft: 18, color: "#53655a", fontSize: 10, lineHeight: 1.6 }}>
+              {panelResult.agent.steps.map((step) => <li key={step.name}>{step.name}: {step.detail}</li>)}
+            </ol>
+            <p style={{ margin: "7px 0 0", color: "#77847c", fontSize: 10 }}>ML surrogate validated against held-out synthetic locations; it is not validated against measured rooftop output.</p>
+          </div>}
         </div>}
       </section>}
     </main>

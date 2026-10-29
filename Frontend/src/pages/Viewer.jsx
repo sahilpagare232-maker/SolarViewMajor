@@ -37,8 +37,8 @@ export default function Viewer() {
     </header>
 
     <section className="results-heading">
-      <div><p className="eyebrow">SOLAR ANALYSIS</p><h1>Your area at a glance</h1><p className="muted">Buildings from OpenStreetMap · Estimated energy from demo solar data</p></div>
-      <span className="data-badge">◉ {analysis.solar?.irradiance_source === "synthetic_demo" ? "DEMO SOLAR DATA" : "ESTIMATED"}</span>
+      <div><p className="eyebrow">SOLAR ANALYSIS</p><h1>Your area at a glance</h1><p className="muted">Buildings from OpenStreetMap · {analysis.solar?.data_class || "Modeled annual output"}</p></div>
+      <span className="data-badge">◉ {analysis.solar?.irradiance_source === "pvgis_tmy" ? "TYPICAL WEATHER YEAR" : analysis.solar?.irradiance_source === "pvlib_clear_sky" ? "CLEAR-SKY MODEL" : "MODELED"}</span>
     </section>
 
     <section className="metric-grid" aria-label="Analysis summary">
@@ -65,6 +65,6 @@ export default function Viewer() {
     </section>
 
     {optimizationWarnings.length > 0 && <p className="alert-error" role="status"><strong>Some building layouts were skipped.</strong> {optimizationWarnings.length} roof{optimizationWarnings.length === 1 ? "" : "s"} exceeded the fast placement candidate limit. Select an individual building in 3D to optimize it separately.</p>}
-    <footer className="results-footnote">{analysis.solar?.data_class || "Energy is estimated from synthetic demo irradiance, not measured weather."} Rooftop usability is an approximation; roof pitch, shade and obstructions are not modeled.</footer>
+    <footer className="results-footnote">{analysis.solar?.data_class || "Energy is weather-modeled, not metered."} Rooftop usability is an approximation; roof pitch, shade and obstructions are not modeled.</footer>
   </main>;
 }

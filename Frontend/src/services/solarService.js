@@ -3,11 +3,12 @@
 import apiFetch from "./api";
 
 // Run the full area analysis using the existing frontend bounding-box format.
-export const sendArea = (selectedArea) => {
+export const sendArea = (selectedArea, { includeOptimization = true } = {}) => {
   return apiFetch("/api/analyze-area", {
     method: "POST",
     body: JSON.stringify({
       coordinates: selectedArea,
+      include_optimization: includeOptimization,
     }),
   });
 };
