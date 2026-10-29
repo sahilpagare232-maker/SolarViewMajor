@@ -1,7 +1,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-
+import CameraControls from "./CameraControls";
+import { enableCameraControls } from "./cameraUtils";
 import {
   Viewer,
   GeoJsonDataSource,
@@ -9,7 +10,10 @@ import {
   HeightReference,
   Rectangle,
   ScreenSpaceEventHandler,
-  ScreenSpaceEventType
+  ScreenSpaceEventType,
+  buildModuleUrl,
+  GridMaterialProperty,
+  Cartesian2,
 } from "cesium";
 
 import "cesium/Build/Cesium/Widgets/widgets.css";
@@ -128,6 +132,7 @@ export default function CesiumViewer() {
         await Promise.resolve();
         if (cancelled) return;
 
+        buildModuleUrl.setBaseUrl("/cesium/");
         viewer = new Viewer(containerRef.current, {
   animation: false,
   timeline: false,
@@ -148,29 +153,44 @@ export default function CesiumViewer() {
   selectionIndicator: false,
 });
 viewerRef.current = viewer;
+enableCameraControls(viewer);
 const viewArea = analysis?.area;
 if (viewArea) {
+  // Increase ground size by 50% in each direction
+  const latPadding =
+    (viewArea.ne_lat - viewArea.sw_lat) * 0.4;
+
+  const lngPadding =
+    (viewArea.ne_lng - viewArea.sw_lng) * 0.4;
+
   viewer.entities.add({
     name: "Flat Ground",
     rectangle: {
       coordinates: Rectangle.fromDegrees(
-        viewArea.sw_lng,
-        viewArea.sw_lat,
-        viewArea.ne_lng,
-        viewArea.ne_lat
+        viewArea.sw_lng - lngPadding,
+        viewArea.sw_lat - latPadding,
+        viewArea.ne_lng + lngPadding,
+        viewArea.ne_lat + latPadding
       ),
-      height: 0,
-      material: Color.DARKGRAY,
-      outline: false,
-
+       height: 0,
+    heightReference: HeightReference.NONE,
+    material: new GridMaterialProperty({
+      color: Color.fromCssColorString("#00D9FF").withAlpha(0.22),
+      cellAlpha: 0.12,
+      lineCount: new Cartesian2(80, 80),
+      lineThickness: new Cartesian2(1.0, 1.0),
+      lineOffset: new Cartesian2(0, 0),
+    }),
+    outline: false,
     },
   });
+
 }
 
         const dataSource = await GeoJsonDataSource.load(renderableGeojson, {
           clampToGround: false,
-          stroke: Color.DARKSLATEGRAY,
-          fill: Color.DODGERBLUE.withAlpha(0.75),
+          stroke: Color.CYAN,
+          fill: Color.fromCssColorString("#1679B8").withAlpha(0.82),
           strokeWidth: 2,
         });
 
@@ -356,6 +376,10 @@ viewer.scene.screenSpaceCameraController.minimumZoomDistance = 20;
             ? <span role="alert" style={{ color: "#983a2f" }}>{loadError}</span>
             : <span aria-live="polite">{renderableGeojson.features.length} building footprint{renderableGeojson.features.length === 1 ? "" : "s"} loaded. Click a building to place panels.</span>}
       </nav>
+      <CameraControls
+  viewerRef={viewerRef}
+  area={analysis?.area}
+/>
       {selectedBuilding && !loading && !loadError && <section aria-label="Selected building panel placement" style={{ position: "absolute", top: 86, left: 16, zIndex: 1, width: "min(360px, calc(100vw - 32px))", padding: 18, border: "1px solid #e5eae4", borderRadius: 12, background: "white", boxShadow: "0 4px 18px #0002", color: "#182820" }}>
         <p className="eyebrow" style={{ marginBottom: 6 }}>SELECTED ROOFTOP</p>
         <h2 style={{ margin: "0 0 6px", fontSize: 17 }}>{selectedBuilding.building_type}</h2>
@@ -371,13 +395,6 @@ viewer.scene.screenSpaceCameraController.minimumZoomDistance = 20;
           Usable roof {panelResult.usable_area_m2} m² · Coverage {panelResult.panel_coverage_percent}%<br />
           Annual energy ≈ {Number(panelResult.annual_energy_kwh).toLocaleString()} kWh
           <p style={{ margin: "8px 0 0", color: "#77847c", fontSize: 10 }}>{panelResult.roof_assumption}. Energy is {panelResult.annual_energy_data_class}. {selectedBuilding.height_m == null ? `For display only, panels use the existing ${DEFAULT_DISPLAY_HEIGHT_M} m placeholder building height.` : "Roof height uses the OSM height tag."}</p>
-          {panelResult.agent && <div style={{ marginTop: 12, borderTop: "1px solid #e5eae4", paddingTop: 10 }}>
-            <strong style={{ display: "block", marginBottom: 5 }}>{panelResult.agent.name} · complete</strong>
-            <ol style={{ margin: 0, paddingLeft: 18, color: "#53655a", fontSize: 10, lineHeight: 1.6 }}>
-              {panelResult.agent.steps.map((step) => <li key={step.name}>{step.name}: {step.detail}</li>)}
-            </ol>
-            <p style={{ margin: "7px 0 0", color: "#77847c", fontSize: 10 }}>ML surrogate validated against held-out synthetic locations; it is not validated against measured rooftop output.</p>
-          </div>}
         </div>}
       </section>}
     </main>

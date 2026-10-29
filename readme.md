@@ -1,725 +1,220 @@
-# Solar Potential & Panel Optimization System
+# SunScapeAI (SolarView)
 
-An intelligent web-based system for estimating the solar energy potential of buildings and optimizing solar panel placement using geographic data, building geometry, solar irradiance, and photovoltaic models.
+SunScapeAI is a web application for exploring estimated rooftop solar potential in a selected geographic area. A user searches for a place, draws an area on the map, retrieves building footprints from OpenStreetMap, and views estimated rooftop layouts and energy summaries. A separate 3D view lets the user select an individual building and request a panel layout.
 
-The system allows a user to search for a location, select an area on an interactive map, retrieve building information, analyze available rooftop surfaces, estimate solar energy generation, and determine suitable solar panel placements.
+This repository contains a React/Vite frontend and a Python/FastAPI backend. The current solar figures are estimates based on a configured synthetic irradiance value; they are not measured weather data, a financial forecast, or a detailed PV system simulation.
 
----
+## What the application does
 
-## 1. Project Objective
+1. The user searches for a location and draws a rectangular area on the map.
+2. The frontend sends the rectangle's southwest and northeast coordinates to the backend.
+3. The backend queries the OpenStreetMap Overpass API for building footprints, processes the returned geometries, and creates GeoJSON.
+4. Building footprints are projected into a local metric coordinate system for area and roof-layout calculations.
+5. The backend approximates usable roof area by applying a setback to each footprint and packs panels in two grid orientations.
+6. It returns building data, panel layouts, installed capacity, and estimated energy. The frontend displays these results on a map, in a table, and in a Cesium 3D view.
 
-The main objective of this project is to develop a system that can:
+## Current capabilities and limitations
 
-- Allow users to search for a location.
-- Display the selected location on an interactive map.
-- Allow users to select an area for analysis.
-- Retrieve building footprints within the selected area.
-- Convert building data into GeoJSON.
-- Analyze rooftop/building geometry.
-- Estimate solar irradiance and sunlight availability.
-- Determine suitable areas for solar panel installation.
-- Calculate estimated solar energy generation.
-- Estimate system capacity and potential electricity generation.
-- Optimize panel placement based on available rooftop area and solar conditions.
-- Provide the results through a simple web interface.
+- Search a location, draw a rectangular area, and view the analyzed buildings on a Leaflet map.
+- Review footprint area, estimated usable roof area, tagged building height (when present), panel count, capacity, and estimated annual energy.
+- Request a panel layout for a selected building in the Cesium view.
+- Receive building geometry in GeoJSON longitude/latitude coordinate order.
+- Panel placement is a deterministic geometric grid heuristic. It compares 0° and 90° layouts, maximizing panel count and using covered area as a tie-breaker; it is not a global optimizer or an AI/RL model.
+- Roof area is approximated from the building footprint. Roof pitch, obstructions, shading, structural suitability, and actual roof surfaces are not modeled.
+- Missing OSM building heights remain unknown. A display-only placeholder in the 3D viewer does not turn an unknown height into measured data.
+- Annual irradiance defaults to a configurable synthetic demo value. PVLib is used for a solar-position calculation when available, not for a detailed weather-driven PV production simulation. Energy output is explicitly an estimate.
+- OpenStreetMap and public Overpass availability, coverage, and rate limits affect data retrieval. Keep selected areas small.
+- The repository includes synthetic data files, but the live API currently uses its configured synthetic irradiance setting rather than loading those files as live measured weather input.
 
-The project combines **GIS, solar-energy modeling, optimization, and AI-assisted analysis**.
+## Technology
 
----
+| Area | Technologies |
+| --- | --- |
+| Frontend | React, JavaScript, Vite, React Router |
+| 2D map | Leaflet, React-Leaflet, Leaflet Draw |
+| 3D map | Cesium |
+| Backend API | Python, FastAPI, Pydantic, Uvicorn |
+| Geographic processing | Shapely, pyproj, GeoJSON |
+| Solar estimate | NumPy, pandas, PVLib (solar position when installed) |
+| Building source | OpenStreetMap via the public Overpass API |
 
-# 2. System Architecture
-
-```text
-                         ┌──────────────────────┐
-                         │        USER          │
-                         │ Search / Select Area │
-                         └──────────┬───────────┘
-                                    │
-                                    ▼
-                    ┌────────────────────────────┐
-                    │         FRONTEND           │
-                    │      React + Leaflet       │
-                    │                            │
-                    │ • Search Location          │
-                    │ • Interactive Map           │
-                    │ • Area Selection            │
-                    │ • Display Results            │
-                    └─────────────┬──────────────┘
-                                  │
-                              HTTP / JSON
-                                  │
-                                  ▼
-                    ┌────────────────────────────┐
-                    │          BACKEND            │
-                    │          FastAPI            │
-                    │                            │
-                    │ • Area Processing            │
-                    │ • Building Data             │
-                    │ • GeoJSON Processing        │
-                    │ • Solar Calculations        │
-                    │ • Panel Optimization        │
-                    └─────────────┬──────────────┘
-                                  │
-              ┌───────────────────┼───────────────────┐
-              │                   │                   │
-              ▼                   ▼                   ▼
-        ┌───────────┐       ┌───────────┐       ┌───────────┐
-        │   OSM /   │       │  Solar /  │       │  PVLib    │
-        │ Overpass  │       │ Weather   │       │           │
-        │           │       │   Data    │       │ PV Model  │
-        └───────────┘       └───────────┘       └───────────┘
-                                  │
-                                  ▼
-                       ┌─────────────────────┐
-                       │ Optimization / AI   │
-                       │                     │
-                       │ Panel Placement     │
-                       │ Energy Estimation   │
-                       │ Cost Analysis       │
-                       └─────────────────────┘
-```
-
----
-
-# 3. Technology Stack
-
-## Frontend
-
-- React
-- JavaScript
-- Leaflet
-- React-Leaflet
-- HTML/CSS
-
-The frontend is responsible for map interaction, location search, area selection, and displaying analysis results.
-
----
-
-## Backend
-
-- Python
-- FastAPI
-- Uvicorn
-- Pydantic
-- GeoPandas
-- Shapely
-- NumPy
-- Pandas
-
-The backend handles geographic processing, building data retrieval, solar calculations, and optimization.
-
----
-
-## Geographic Data
-
-### OpenStreetMap
-
-OpenStreetMap is used as the primary source for building and geographic information.
-
-Building data can be retrieved through:
-
-- Overpass API
-- OSM data
-- GeoJSON conversion
-
-The system should preserve accurate building geometries whenever possible.
-
----
-
-## Solar Modeling
-
-### PVLib
-
-PVLib is used for photovoltaic and solar-energy calculations.
-
-PVLib can be used for:
-
-- Solar position
-- Irradiance calculations
-- Plane-of-array irradiance
-- PV system modeling
-- Energy estimation
-- Temperature effects
-- DC/AC power estimation
-
----
-
-## 4. Core Workflow
+## Repository layout
 
 ```text
-User searches location
-        ↓
-Location displayed on map
-        ↓
-User selects area
-        ↓
-Frontend sends selected coordinates
-        ↓
-FastAPI receives area
-        ↓
-Building data retrieved
-        ↓
-Building geometry converted to GeoJSON
-        ↓
-Building rooftops analyzed
-        ↓
-Solar/irradiance data obtained
-        ↓
-Solar potential calculated
-        ↓
-Suitable rooftop areas identified
-        ↓
-Solar panels positioned
-        ↓
-PV energy generation estimated
-        ↓
-Optimization performed
-        ↓
-Results returned to frontend
-        ↓
-User views solar potential
+Backend/
+  api/routes/area.py             Area analysis and selected-building API routes
+  models/                        Pydantic request/response and panel models
+  services/
+    analysis_service.py          Orchestrates area analysis
+    grid_service.py              Tiles, fetches, and deduplicates OSM buildings
+    osm_service.py               Overpass HTTP requests and errors
+    geojson_service.py           Geometry projection, measurements, and GeoJSON
+    optimization_service.py      Setback-aware panel layout and selected-building optimizer
+    pv_service.py                Solar-position and estimated-energy calculations
+  tests/                         Backend API and service tests
+  config.py                      Environment-backed backend settings
+  main.py                        FastAPI app, CORS, health endpoint
+  requirements.txt               Python dependencies
+Frontend/
+  src/pages/                     Home, map, results, and Cesium pages
+  src/maps/                      Leaflet map, drawing control, and search UI
+  src/services/                  Backend API and location/solar request helpers
+  package.json                   Frontend scripts and dependencies
+synthetic_solar_dataset/         Synthetic dataset artifacts
+Synth_Data/                      Synthetic data generation code
 ```
 
----
+## Prerequisites
 
-# 5. Frontend
+- Windows PowerShell (commands below use PowerShell syntax).
+- Python 3.11, available as `py -3.11`.
+- Node.js 22 or newer and npm.
+- Internet access for package installation, map/location services, and Overpass building queries.
 
-The frontend provides an interactive map-based interface.
+## Local setup
 
-### Main features
+### Backend
 
-### Location Search
+From the repository root:
 
-Users can search for an address or location.
-
-The map moves to the selected location.
-
-### Area Selection
-
-The user can draw/select an area on the map.
-
-The selected area is converted into geographic coordinates.
-
-Example:
-
-```json
-{
-  "coordinates": {
-    "sw_lat": 19.123,
-    "sw_lng": 73.123,
-    "ne_lat": 19.130,
-    "ne_lng": 73.135
-  }
-}
+```powershell
+cd D:\SunScapeAI\Backend
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
-The coordinates are sent to the backend.
+If PowerShell blocks virtual-environment activation, either adjust the execution policy for your user according to your organization's guidance, or skip activation and run `.\.venv\Scripts\python.exe -m pip ...` and `.\.venv\Scripts\python.exe -m uvicorn ...` explicitly.
 
-### Map
+Create `Backend\.env` from `Backend\.env.example` if you need local overrides and do not already have a local `.env`:
 
-Leaflet is used to display:
-
-- OpenStreetMap tiles
-- Search results
-- Building footprints
-- GeoJSON
-- Solar analysis results
-- Panel placement
-
----
-
-# 6. Backend
-
-The backend is implemented using FastAPI.
-
-Example structure:
-
-```text
-backend/
-│
-├── main.py
-│
-├── api/
-│   ├── routes/
-│   │   ├── area.py
-│   │   ├── buildings.py
-│   │   ├── solar.py
-│   │   └── optimization.py
-│
-├── services/
-│   ├── osm_service.py
-│   ├── geojson_service.py
-│   ├── solar_service.py
-│   ├── pv_service.py
-│   └── optimization_service.py
-│
-├── models/
-│   ├── area_models.py
-│   ├── building_models.py
-│   └── solar_models.py
-│
-├── utils/
-│   ├── geometry.py
-│   └── coordinates.py
-│
-└── requirements.txt
+```powershell
+Copy-Item .env.example .env
 ```
 
-The exact structure can be simplified during the initial implementation.
+Keep local environment files and credentials private. Share `.env.example`, not a populated `.env`.
 
----
+Start the API from `Backend\` with the virtual environment active:
 
-# 7. Building Data
-
-Building footprints are obtained from OpenStreetMap.
-
-The backend sends a query to Overpass using the selected geographic area.
-
-Conceptually:
-
-```text
-Selected Area
-      ↓
-Overpass API
-      ↓
-OSM Building Data
-      ↓
-Building IDs / Geometry
-      ↓
-GeoJSON
+```powershell
+python -m uvicorn main:app --reload
 ```
 
-The system should retrieve building geometry rather than only building IDs.
+The API is available at `http://127.0.0.1:8000`. Health check: `http://127.0.0.1:8000/health`. Interactive API docs: `http://127.0.0.1:8000/docs`.
 
----
+### Frontend
 
-# 8. GeoJSON
+In a second PowerShell terminal:
 
-GeoJSON is used as the primary format for transferring geographic geometry between the backend and frontend.
-
-Example:
-
-```json
-{
-  "type": "FeatureCollection",
-  "features": [
-    {
-      "type": "Feature",
-      "properties": {
-        "building_id": "12345"
-      },
-      "geometry": {
-        "type": "Polygon",
-        "coordinates": []
-      }
-    }
-  ]
-}
+```powershell
+cd D:\SunScapeAI\Frontend
+npm install
+npm run dev
 ```
 
-GeoJSON allows the frontend to directly display building geometries using Leaflet.
+Open the local URL printed by Vite (normally `http://localhost:5173`). Vite proxies `/api` requests to `http://127.0.0.1:8000`; start the backend as well to use area analysis and building optimization.
+The Vite Cesium plugin serves Cesium's workers and static data under `/cesium/`; keep the plugin enabled when changing the Vite config.
 
----
+Useful frontend commands, run from `Frontend\`:
 
-# 9. Building/Rooftop Analysis
-
-For every building, the system should analyze:
-
-- Building footprint
-- Building area
-- Polygon geometry
-- Orientation
-- Possible rooftop area
-- Building height when available
-- Roof suitability
-- Potential panel area
-
-Not every building footprint is automatically suitable for solar panels.
-
-The system should consider constraints such as:
-
-- Minimum usable area
-- Panel dimensions
-- Panel spacing
-- Roof orientation
-- Roof inclination when available
-- Shading
-- Building boundaries
-- Safety margins
-
----
-
-# 10. Solar Irradiance
-
-Solar irradiance represents the amount of solar radiation received by a surface.
-
-Important quantities include:
-
-### GHI
-
-Global Horizontal Irradiance.
-
-Solar radiation received by a horizontal surface.
-
-### DNI
-
-Direct Normal Irradiance.
-
-Direct solar radiation received perpendicular to the Sun's rays.
-
-### DHI
-
-Diffuse Horizontal Irradiance.
-
-Solar radiation scattered by the atmosphere.
-
-These values can be used together to calculate irradiance on the plane of the solar panel.
-
----
-
-# 11. Solar Position
-
-The position of the Sun changes throughout the day and year.
-
-Important parameters include:
-
-- Solar azimuth
-- Solar elevation
-- Zenith angle
-
-PVLib can calculate solar position using:
-
-```text
-Latitude
-Longitude
-Date
-Time
-Timezone
+```powershell
+npm run lint
+npm run build
+npm run preview
 ```
 
-This allows the system to determine the Sun's position for solar-energy calculations.
+Useful backend commands, run from `Backend\` with the venv active:
 
----
-
-# 12. PVLib
-
-PVLib is the primary photovoltaic modeling library.
-
-The system can use PVLib for:
-
-```text
-Location
-   ↓
-Solar Position
-   ↓
-Irradiance
-   ↓
-Plane-of-Array Irradiance
-   ↓
-PV Module Model
-   ↓
-DC Power
-   ↓
-Inverter
-   ↓
-AC Power
-   ↓
-Energy
+```powershell
+python -m pytest tests
 ```
 
----
+The endpoint tests mock Overpass and should not make live external requests. `Backend\service_test.py` is a legacy manual Overpass script, not part of the pytest suite.
 
-# 13. Solar Energy Estimation
+## API overview
 
-A simplified energy calculation is:
+All area bounds use decimal degrees. Southwest values must be less than northeast values; antimeridian-crossing selections are not supported.
 
-```text
-Energy = Irradiance × Panel Area × Panel Efficiency × System Efficiency
-```
+### `GET /health`
 
-For more accurate modeling, PVLib should be used instead of relying only on this simplified formula.
+Returns `{"status":"ok"}` when the API process is running.
 
-The final system can estimate:
+### `POST /api/analyze-area`
 
-- Daily energy
-- Monthly energy
-- Annual energy
-- Installed capacity
-- Peak power
-- Estimated AC output
-
----
-
-# 14. Panel Placement
-
-Panel placement is one of the main optimization tasks.
-
-The system should determine how many panels can fit on a suitable rooftop area.
-
-Inputs include:
-
-```text
-Roof Geometry
-Panel Width
-Panel Length
-Panel Efficiency
-Panel Power
-Panel Orientation
-Panel Tilt
-Required Spacing
-```
-
-The optimization process attempts to maximize:
-
-```text
-Solar Energy Generation
-```
-
-while satisfying:
-
-```text
-Available Roof Area
-Panel Dimensions
-Spacing
-Roof Boundaries
-Orientation
-Shading
-```
-
----
-
-# 15. Optimization
-
-The optimization layer can determine:
-
-- Number of panels
-- Panel locations
-- Panel orientation
-- Panel tilt
-- Expected energy generation
-- Suitable rooftop regions
-
-A future optimization model can use:
-
-```text
-Objective:
-Maximize annual solar energy
-
-Subject to:
-Panel must remain inside roof
-Panel spacing constraints
-Available area constraints
-Orientation constraints
-Shading constraints
-```
-
----
-
-# 16. AI / Agent Layer
-
-The project can optionally use an AI agent architecture.
-
-Possible agents include:
-
-```text
-                 ┌─────────────────────┐
-                 │    Main AI Agent    │
-                 └──────────┬──────────┘
-                            │
-          ┌─────────────────┼─────────────────┐
-          │                 │                 │
-          ▼                 ▼                 ▼
-    ┌───────────┐     ┌────────────┐    ┌─────────────┐
-    │ Solar     │     │ Panel      │    │ Cost / ROI  │
-    │ Agent     │     │ Agent      │    │ Agent       │
-    └───────────┘     └────────────┘    └─────────────┘
-```
-
-### Solar Agent
-
-Responsible for:
-
-- Solar irradiance
-- Solar position
-- Energy estimation
-
-### Panel Agent
-
-Responsible for:
-
-- Panel placement
-- Number of panels
-- Roof utilization
-
-### Cost Agent
-
-Responsible for:
-
-- Installation cost
-- Estimated electricity generation
-- Savings
-- ROI
-- Payback period
-
-LangChain can be introduced later if the AI-agent layer becomes necessary.
-
-The core scientific calculations should remain deterministic and should not depend on an LLM.
-
----
-
-# 17. API Design
-
-Example API endpoints:
-
-### Health Check
-
-```http
-GET /health
-```
-
-### Analyze Area
-
-```http
-POST /api/analyze-area
-```
+Analyzes buildings in a bounding box. `/api/area` is a backward-compatible alias.
 
 Request:
 
 ```json
 {
   "coordinates": {
-    "sw_lat": 19.123,
-    "sw_lng": 73.123,
-    "ne_lat": 19.130,
-    "ne_lng": 73.135
+    "sw_lat": 19.07545,
+    "sw_lng": 72.87908,
+    "ne_lat": 19.07715,
+    "ne_lng": 72.88333
   }
 }
 ```
 
-Response:
+The response contains:
 
-```json
-{
-  "buildings": [],
-  "geojson": {},
-  "solar": {},
-  "optimization": {}
-}
-```
+- `area`: accepted bounding box.
+- `buildings.count` and `buildings.items`: building identifiers, available OSM tags, footprint/usable-roof areas, optional height, centroid/orientation information, and geometry.
+- `buildings.geojson`: building FeatureCollection for map rendering.
+- `solar`: irradiance source and data-class labels, configured annual irradiance, and solar-position method.
+- `optimization`: total panel count, estimated installed capacity and annual energy, per-building layouts, and any layout warnings.
 
----
+### `POST /api/optimize-building`
 
-# 18. Error Handling
+Optimizes one selected footprint. The request includes a `building_id`, a Polygon or MultiPolygon GeoJSON `geometry`, `coordinates` for the local projection, and optional `height_m` and `panel_config`. The response includes a GeoJSON FeatureCollection in `panel_layout`, panel specifications and counts, capacity/energy estimates, and the assumptions used.
 
-The system should gracefully handle:
+### Common errors
 
-- Invalid coordinates
-- Empty areas
-- No buildings found
-- Overpass timeout
-- API errors
-- Invalid GeoJSON
-- Missing building attributes
-- Missing solar data
-- Large selected areas
+- `422`: invalid bounds, request fields, or building geometry.
+- `404`: area query returned no usable building footprints.
+- `413`: area/roof exceeds a processing limit.
+- `429`: Overpass rate limit.
+- `502` / `503` / `504`: upstream Overpass failure or timeout.
 
-Overpass requests should use reasonable query sizes and timeout handling.
+Errors use FastAPI's standard JSON `detail` field.
 
----
+## Configuration
 
-# 19. Performance Considerations
+Backend settings are read from environment variables, with optional values in `Backend\.env`. Environment variables take precedence over `.env`.
 
-The system should avoid unnecessarily large Overpass requests.
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `OVERPASS_URL` | `https://overpass-api.de/api/interpreter` | Overpass endpoint |
+| `REQUEST_TIMEOUT` | `60` | Upstream request timeout in seconds |
+| `DEFAULT_LATITUDE` / `DEFAULT_LONGITUDE` | `19.0760` / `72.8777` | Default map location |
+| `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Allowed frontend origins, comma-separated |
+| `PANEL_WIDTH_M` / `PANEL_LENGTH_M` | `1.1` / `1.8` | Default panel dimensions in metres |
+| `PANEL_POWER_W` | `400` | Default panel rating |
+| `PANEL_EFFICIENCY` | `0.20` | Default panel efficiency setting |
+| `PANEL_SPACING_M` | `0.05` | Gap between panels in metres |
+| `ROOF_SETBACK_M` | `0.5` | Roof-edge setback in metres |
+| `MINIMUM_ROOF_AREA_M2` | `4` | Minimum usable area considered in area analysis |
+| `DEFAULT_TILT` / `DEFAULT_AZIMUTH` | `20` / `180` | Default solar settings |
+| `SYNTHETIC_ANNUAL_IRRADIANCE_KWH_M2` | `1700` | Synthetic demo irradiance input; not a measured weather feed |
 
-Recommended approach:
+## Development notes
 
-```text
-Small area
-   ↓
-Overpass query
-   ↓
-Process buildings
-   ↓
-Cache results
-   ↓
-Solar analysis
-```
+- Keep frontend API calls in `Frontend/src/services/` and backend route handling in `Backend/api/routes/`; put domain operations in backend services.
+- Validate API inputs with the Pydantic models in `Backend/models/`.
+- Preserve the GeoJSON coordinate convention `[longitude, latitude]` when working with geographic geometries.
+- Geometry areas and panel packing must use a projected metric CRS, not raw latitude/longitude degrees.
+- Tests for external data should mock the upstream service. Avoid relying on public Overpass availability in automated tests.
+- Clearly label synthetic, estimated, and OSM-derived values. Do not describe synthetic irradiance as measured data or the deterministic grid heuristic as AI/ML optimization.
+- Do not commit local virtual environments, generated caches, or credentials.
 
-For larger areas, the system should:
+## Troubleshooting
 
-- Limit query size
-- Split requests if necessary
-- Cache building data
-- Avoid repeated API calls
-- Process buildings independently
-
----
-
-# 20. Accuracy Considerations
-
-OpenStreetMap provides useful building footprints but does not guarantee accurate:
-
-- Building height
-- Roof height
-- Roof type
-- Roof inclination
-- Roof orientation
-
-For improved accuracy, the project can later integrate additional sources such as:
-
-- LiDAR
-- Digital Surface Models
-- Digital Elevation Models
-- Satellite imagery
-- Building height datasets
-
-The system should distinguish between **measured/observed values** and **estimated values**.
-
----
-
-# 21. Future Improvements
-
-Potential future features include:
-
-- LiDAR-based building height
-- 3D building reconstruction
-- Roof slope detection
-- Shadow simulation
-- Satellite imagery
-- Better weather datasets
-- Machine-learning based solar prediction
-- Advanced panel optimization
-- Electricity tariff integration
-- Cost estimation
-- ROI calculation
-- Battery-storage optimization
-- Multiple panel types
-- User accounts
-- Historical solar analysis
-- Detailed PDF reports
-
----
-
-# 22. Project Goal
-
-The final system should provide a simple workflow:
-
-```text
-Search Location
-      ↓
-Select Area
-      ↓
-Get Buildings
-      ↓
-Analyze Rooftops
-      ↓
-Calculate Solar Potential
-      ↓
-Optimize Panel Placement
-      ↓
-Estimate Energy Generation
-      ↓
-Display Results
-```
-
-The system is intended to demonstrate how **GIS + OpenStreetMap + solar modeling + photovoltaic simulation + optimization + AI** can be combined into a practical solar-energy planning platform.
+| Symptom | Checks |
+| --- | --- |
+| Frontend cannot reach the API | Confirm the backend is running on `127.0.0.1:8000`; check the Vite `/api` proxy and browser console. |
+| Backend dependencies are missing | Activate `Backend\.venv` and reinstall with `python -m pip install -r requirements.txt`. |
+| No buildings are returned | Try a nearby area with OSM building coverage; verify the selected rectangle and upstream Overpass availability. |
+| Overpass request fails or times out | Reduce the selected area and retry later; public Overpass instances enforce resource and rate limits. |
+| Browser reports a CORS error | Set `CORS_ORIGINS` to the exact local frontend origin, then restart the backend. |
+| Results differ from expected real-world output | The current irradiance input is synthetic and roof surfaces/shading are simplified; treat the result as a demo estimate. |
