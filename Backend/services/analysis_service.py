@@ -22,7 +22,7 @@ async def analyze_area(bounds: BoundingBox) -> dict[str, object]:
         raise HTTPException(status_code=status, detail=message) from exc
     if not buildings:
         raise HTTPException(status_code=404, detail="No building footprints with usable geometry were found in the selected area.")
-    features, optimizations = [], []
+    features, optimizations, optimization_warnings = [], [], []
     for building in buildings:
         row = analyze_building(building, bounds)
         roof = usable_roof(building["geometry"], bounds)
@@ -30,7 +30,18 @@ async def analyze_area(bounds: BoundingBox) -> dict[str, object]:
         row.pop("_projected", None)
         features.append(row)
         if roof.area >= settings.minimum_roof_area_m2:
-            optimizations.append({"building_id": building["id"], **pack_panels(roof, bounds)})
+            try:
+                optimizations.append({
+                    "building_id": building["id"],
+                    **pack_panels(
+                        roof,
+                        bounds,
+                        height_m=row["height"],
+                        setback_already_applied=True,
+                    ),
+                })
+            except ValueError as exc:
+                optimization_warnings.append({"building_id": building["id"], "detail": str(exc)})
     solar_models = [item["solar_model"] for item in optimizations]
     total_panels = sum(item["panel_count"] for item in optimizations)
     return {"area": bounds.model_dump(),
@@ -41,4 +52,5 @@ async def analyze_area(bounds: BoundingBox) -> dict[str, object]:
             "optimization": {"total_panels": total_panels,
                              "installed_capacity_kw": round(sum(item["installed_capacity_kw"] for item in optimizations), 2),
                              "annual_energy_kwh": round(sum(item["annual_energy_kwh"] for item in optimizations), 2),
+                             "warnings": optimization_warnings,
                              "buildings": optimizations}}

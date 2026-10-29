@@ -31,6 +31,31 @@ The API listens on `http://127.0.0.1:8000`. Interactive OpenAPI documentation is
 }
 ```
 
+`POST /api/optimize-building` accepts the selected building footprint from the Cesium view and returns its panel polygons as a GeoJSON `FeatureCollection`. The request uses the same `coordinates` bounds returned by area analysis:
+
+```json
+{
+  "building_id": "way/12345",
+  "geometry": {
+    "type": "Polygon",
+    "coordinates": [[[72.0, 19.0], [72.0001, 19.0], [72.0001, 19.0001], [72.0, 19.0001], [72.0, 19.0]]]
+  },
+  "coordinates": {
+    "sw_lat": 18.99,
+    "sw_lng": 71.99,
+    "ne_lat": 19.02,
+    "ne_lng": 72.02
+  },
+  "height_m": 12
+}
+```
+
+The endpoint repairs simple invalid polygon rings when possible, projects geometry to local UTM metres, applies the configured edge setback, and evaluates deterministic grid layouts at 0° and 90°. It maximizes feasible panel count, then uses covered area as a tie-breaker. The result includes panel dimensions, spacing, orientation, elevation when tagged, capacity, approximate coverage, energy estimate, and explicit flat-roof assumptions. Invalid geometry returns `422`; roofs exceeding the candidate-work limit return `413`.
+
+Cesium's building click handler sends only the selected feature to this endpoint. It renders returned panel polygons as a separate data source. Untagged heights stay `null` in the API; the viewer uses the existing 10 m placeholder only to display panels on an extrusion.
+
+The optimizer is a deterministic geometric heuristic, not reinforcement learning and not a proven global optimum. An RL policy could later be added behind the optimizer service interface, with this geometry-validating grid method retained as its fallback. No suitable roof-layout training set currently exists, so this project does not train or claim an RL model.
+
 Successful responses contain `area`, `buildings.count`, `buildings.items`, renderable `buildings.geojson`, solar metadata, and per-building panel layouts under `optimization.buildings`. Panel polygons and OSM footprints are GeoJSON in `[longitude, latitude]` order. For example, a synthetic/mock-backed response has this shape:
 
 ```json
@@ -55,4 +80,4 @@ Errors use FastAPI's standard `{"detail":"..."}` format: `422` for invalid coord
 
 ## Tests
 
-Install the requirements, then from `Backend/` run `python -m pytest`. Tests mock Overpass for endpoint analysis and do not make live external requests.
+Install the requirements, then from `Backend/` run `python -m pytest tests`. Tests mock Overpass for endpoint analysis and do not make live external requests. (`service_test.py` is a legacy manual Overpass script, not part of the pytest suite.)

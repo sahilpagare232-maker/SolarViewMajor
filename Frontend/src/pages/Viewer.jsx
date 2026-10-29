@@ -26,6 +26,7 @@ export default function Viewer() {
   const buildings = analysis.buildings?.items ?? [];
   const optimization = analysis.optimization ?? {};
   const panelLayouts = optimization.buildings ?? [];
+  const optimizationWarnings = optimization.warnings ?? [];
   const place = { lat: (area.sw_lat + area.ne_lat) / 2, lon: (area.sw_lng + area.ne_lng) / 2, name: "Analyzed area" };
   const energyClass = analysis.solar?.data_class ?? "Estimated energy output";
 
@@ -63,6 +64,7 @@ export default function Viewer() {
       </table></div>}
     </section>
 
+    {optimizationWarnings.length > 0 && <p className="alert-error" role="status"><strong>Some building layouts were skipped.</strong> {optimizationWarnings.length} roof{optimizationWarnings.length === 1 ? "" : "s"} exceeded the fast placement candidate limit. Select an individual building in 3D to optimize it separately.</p>}
     <footer className="results-footnote">{analysis.solar?.data_class || "Energy is estimated from synthetic demo irradiance, not measured weather."} Rooftop usability is an approximation; roof pitch, shade and obstructions are not modeled.</footer>
   </main>;
 }

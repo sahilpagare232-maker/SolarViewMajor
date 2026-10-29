@@ -1,10 +1,11 @@
 """GeoJSON conversion and metric building geometry analysis."""
 import math
 import re
+from functools import lru_cache
 from typing import Any
+from shapely import transform as shapely_transform
 from pyproj import CRS, Transformer
 from shapely.geometry import mapping
-from shapely.ops import transform
 
 from config import settings
 from models.area_models import BoundingBox
@@ -18,10 +19,17 @@ def metric_crs(bounds: BoundingBox) -> CRS:
     return CRS.from_epsg((32600 if lat >= 0 else 32700) + zone)
 
 
+@lru_cache(maxsize=120)
+def _transformer(source_crs: str, target_crs: str) -> Transformer:
+    """Reuse projection objects across panel features and building requests."""
+    return Transformer.from_crs(source_crs, target_crs, always_xy=True)
+
+
 def _project(geometry: Any, bounds: BoundingBox, inverse: bool = False) -> Any:
     target = metric_crs(bounds)
-    transformer = Transformer.from_crs(target if inverse else "EPSG:4326", "EPSG:4326" if inverse else target, always_xy=True)
-    return transform(transformer.transform, geometry)
+    target_crs = target.to_string()
+    transformer = _transformer(target_crs, "EPSG:4326") if inverse else _transformer("EPSG:4326", target_crs)
+    return shapely_transform(geometry, transformer.transform, interleaved=False)
 
 
 def analyze_building(building: dict[str, Any], bounds: BoundingBox) -> dict[str, Any]:

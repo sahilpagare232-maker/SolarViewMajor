@@ -11,3 +11,9 @@ export const sendArea = (selectedArea) => {
     }),
   });
 };
+
+// Optimize only the building selected in the Cesium scene.
+export const optimizeBuilding = (building) => apiFetch("/api/optimize-building", {
+  method: "POST",
+  body: JSON.stringify(building),
+});
